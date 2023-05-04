@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/CloudyKit/jet/v6"
 	"github.com/go-chi/chi/v5"
 	"github.com/hilsonxhero/napoleon/render"
 	"github.com/joho/godotenv"
@@ -24,6 +25,7 @@ type Napoleon struct {
 	RootPath string
 	Routes   *chi.Mux
 	Render   *render.Render
+	JetViews jet.Set
 	config   config
 }
 
@@ -66,6 +68,12 @@ func (n *Napoleon) New(rootPath string) error {
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
 	}
+
+	var views = jet.NewSet(
+		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
+		jet.InDevelopmentMode(),
+	)
+	n.JetViews = *views
 	n.createRenderer()
 
 	return nil
@@ -121,6 +129,7 @@ func (n *Napoleon) createRenderer() {
 		Renderer: n.config.renderer,
 		RootPath: n.RootPath,
 		Port:     n.config.port,
+		JetViews: n.JetViews,
 	}
 
 	n.Render = &myRenderer
