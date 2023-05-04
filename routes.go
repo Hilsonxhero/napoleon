@@ -17,6 +17,7 @@ func (n *Napoleon) routes() http.Handler {
 	}
 
 	mux.Use(middleware.Recoverer)
+	mux.Use(n.SessionLoad)
 
 	return mux
 }

@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/CloudyKit/jet/v6"
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/hilsonxhero/napoleon/render"
+	"github.com/hilsonxhero/napoleon/session"
 	"github.com/joho/godotenv"
 )
 
@@ -25,13 +27,16 @@ type Napoleon struct {
 	RootPath string
 	Routes   *chi.Mux
 	Render   *render.Render
+	Session  scs.SessionManager
 	JetViews jet.Set
 	config   config
 }
 
 type config struct {
-	port     string
-	renderer string
+	port        string
+	renderer    string
+	cookie      cookieConfig
+	sessionType string
 }
 
 func (n *Napoleon) New(rootPath string) error {
@@ -67,7 +72,24 @@ func (n *Napoleon) New(rootPath string) error {
 	n.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
+		cookie: cookieConfig{
+			name:     os.Getenv("COOKIE_NAME"),
+			lifetime: os.Getenv("COOKIE_LIFETIME"),
+			parsist:  os.Getenv("COOKIE_PARSIST"),
+			srcure:   os.Getenv("SESSION_SECURE"),
+			domain:   os.Getenv("SESSION_DOMAIN"),
+		},
+		sessionType: os.Getenv("SESSION_TYPE"),
 	}
+
+	sess := session.Session{
+		CookieLifetime: n.config.cookie.lifetime,
+		CookiePersist:  n.config.cookie.parsist,
+		CookieName:     n.config.cookie.name,
+		SessionType:    n.config.sessionType,
+		CookieDomain:   n.config.cookie.domain,
+	}
+	n.Session = *sess.InitSession()
 
 	var views = jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
