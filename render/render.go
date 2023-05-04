@@ -1,6 +1,7 @@
 package render
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -37,9 +38,10 @@ func (n *Render) Page(w http.ResponseWriter, r *http.Request, view string, varia
 		return n.GoPage(w, r, view, data)
 	case "jet":
 		return n.JetPage(w, r, view, variables, data)
+	default:
 	}
 
-	return nil
+	return errors.New("no rendering engine specified")
 }
 
 func (n *Render) GoPage(w http.ResponseWriter, r *http.Request, view string, data interface{}) error {
