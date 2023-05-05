@@ -28,6 +28,7 @@ type Napoleon struct {
 	Routes   *chi.Mux
 	Render   *render.Render
 	Session  scs.SessionManager
+	DB       Database
 	JetViews jet.Set
 	config   config
 }
@@ -37,6 +38,7 @@ type config struct {
 	renderer    string
 	cookie      cookieConfig
 	sessionType string
+	database    DatabaseConfig
 }
 
 func (n *Napoleon) New(rootPath string) error {
@@ -63,6 +65,20 @@ func (n *Napoleon) New(rootPath string) error {
 	}
 
 	infoLog, errorLog := n.startLogegrs()
+
+	// connect to database
+	if os.Getenv("DATABASE_TYPE") != "" {
+		db, err := n.OpenDB(os.Getenv("DATABASE_TYPE"), n.BuildDSN())
+		if err != nil {
+			errorLog.Println(err)
+			os.Exit(1)
+		}
+		n.DB = Database{
+			DataType: os.Getenv("DATABASE_TYPE"),
+			Pool:     db,
+		}
+	}
+
 	n.ErrorLog = errorLog
 	n.InfoLog = infoLog
 	n.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
@@ -123,6 +139,8 @@ func (n *Napoleon) ListenAndServe() {
 		WriteTimeout: 600 * time.Second,
 	}
 
+	defer n.DB.Pool.Close()
+
 	n.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
 	err := srv.ListenAndServe()
 	n.ErrorLog.Fatal(err)
@@ -155,4 +173,30 @@ func (n *Napoleon) createRenderer() {
 	}
 
 	n.Render = &myRenderer
+}
+
+// BuildDSN builds the datasource name for our database, and returns it as a string
+func (n *Napoleon) BuildDSN() string {
+	var dsn string
+
+	switch os.Getenv("DATABASE_TYPE") {
+	case "postgres", "postgresql":
+		dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
+			os.Getenv("DATABASE_HOST"),
+			os.Getenv("DATABASE_PORT"),
+			os.Getenv("DATABASE_USER"),
+			os.Getenv("DATABASE_NAME"),
+			os.Getenv("DATABASE_SSL_MODE"))
+
+		// we check to see if a database passsword has been supplied, since including "password=" with nothing
+		// after it sometimes causes postgres to fail to allow a connection.
+		if os.Getenv("DATABASE_PASS") != "" {
+			dsn = fmt.Sprintf("%s password=%s", dsn, os.Getenv("DATABASE_PASS"))
+		}
+
+	default:
+
+	}
+
+	return dsn
 }
