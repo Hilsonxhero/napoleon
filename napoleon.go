@@ -170,6 +170,7 @@ func (n *Napoleon) createRenderer() {
 		RootPath: n.RootPath,
 		Port:     n.config.port,
 		JetViews: n.JetViews,
+		Session:  n.Session,
 	}
 
 	n.Render = &myRenderer
