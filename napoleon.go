@@ -19,18 +19,19 @@ import (
 const version = "1.0.0"
 
 type Napoleon struct {
-	AppName  string
-	Debug    bool
-	Version  string
-	ErrorLog *log.Logger
-	InfoLog  *log.Logger
-	RootPath string
-	Routes   *chi.Mux
-	Render   *render.Render
-	Session  scs.SessionManager
-	DB       Database
-	JetViews jet.Set
-	config   config
+	AppName       string
+	Debug         bool
+	Version       string
+	ErrorLog      *log.Logger
+	InfoLog       *log.Logger
+	RootPath      string
+	Routes        *chi.Mux
+	Render        *render.Render
+	Session       scs.SessionManager
+	DB            Database
+	JetViews      jet.Set
+	config        config
+	EncryptionKey string
 }
 
 type config struct {
@@ -107,6 +108,8 @@ func (n *Napoleon) New(rootPath string) error {
 		DBPool:         n.DB.Pool,
 	}
 	n.Session = *sess.InitSession()
+
+	n.EncryptionKey = os.Getenv("KEY")
 
 	var views = jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
