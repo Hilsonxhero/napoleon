@@ -104,6 +104,7 @@ func (n *Napoleon) New(rootPath string) error {
 		CookieName:     n.config.cookie.name,
 		SessionType:    n.config.sessionType,
 		CookieDomain:   n.config.cookie.domain,
+		DBPool:         n.DB.Pool,
 	}
 	n.Session = *sess.InitSession()
 
