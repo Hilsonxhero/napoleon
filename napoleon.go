@@ -20,6 +20,8 @@ import (
 
 const version = "1.0.0"
 
+var myRedisCache *cache.RedisCache
+
 type Napoleon struct {
 	AppName       string
 	Debug         bool
@@ -84,8 +86,8 @@ func (n *Napoleon) New(rootPath string) error {
 		}
 	}
 
-	if os.Getenv("CACHE") == "redis" {
-		myRedisCache := n.createClientRedisCache()
+	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
+		myRedisCache = n.createClientRedisCache()
 		n.Cache = myRedisCache
 	}
 
@@ -125,6 +127,13 @@ func (n *Napoleon) New(rootPath string) error {
 		SessionType:    n.config.sessionType,
 		CookieDomain:   n.config.cookie.domain,
 		DBPool:         n.DB.Pool,
+	}
+
+	switch n.config.sessionType {
+	case "redis":
+		sess.RedisPool = myRedisCache.Conn
+	case "mysql", "postgres", "mariadb", "postgresql":
+		sess.DBPool = n.DB.Pool
 	}
 	n.Session = *sess.InitSession()
 

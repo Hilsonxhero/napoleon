@@ -6,6 +6,7 @@ require (
 	github.com/CloudyKit/jet/v6 v6.2.0
 	github.com/alexedwards/scs/mysqlstore v0.0.0-20230327161757-10d4299e3b24
 	github.com/alexedwards/scs/postgresstore v0.0.0-20230327161757-10d4299e3b24
+	github.com/alexedwards/scs/redisstore v0.0.0-20230327161757-10d4299e3b24
 	github.com/alexedwards/scs/v2 v2.5.1
 	github.com/alicebob/miniredis/v2 v2.30.2
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
