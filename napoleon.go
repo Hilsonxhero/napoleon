@@ -10,17 +10,22 @@ import (
 
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/go-chi/chi/v5"
 	"github.com/gomodule/redigo/redis"
 	"github.com/hilsonxhero/napoleon/cache"
 	"github.com/hilsonxhero/napoleon/render"
 	"github.com/hilsonxhero/napoleon/session"
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3"
 )
 
 const version = "1.0.0"
 
 var myRedisCache *cache.RedisCache
+var myBadgerCache *cache.BadgerCache
+var redisPool *redis.Pool
+var badgerConn *badger.DB
 
 type Napoleon struct {
 	AppName       string
@@ -37,6 +42,7 @@ type Napoleon struct {
 	config        config
 	EncryptionKey string
 	Cache         cache.Cache
+	Scheduler     *cron.Cron
 }
 
 type config struct {
@@ -86,9 +92,25 @@ func (n *Napoleon) New(rootPath string) error {
 		}
 	}
 
+	scheduler := cron.New()
+	n.Scheduler = scheduler
+
 	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
 		myRedisCache = n.createClientRedisCache()
 		n.Cache = myRedisCache
+	}
+
+	if os.Getenv("CACHE") == "badger" {
+		myBadgerCache = n.createClientBadgerCache()
+		n.Cache = myBadgerCache
+
+		_, err = n.Scheduler.AddFunc("@daily", func() {
+			_ = myBadgerCache.Conn.RunValueLogGC(0.7)
+		})
+
+		if err != nil {
+			return err
+		}
 	}
 
 	n.ErrorLog = errorLog
@@ -138,12 +160,20 @@ func (n *Napoleon) New(rootPath string) error {
 	n.Session = *sess.InitSession()
 
 	n.EncryptionKey = os.Getenv("KEY")
+	if n.Debug {
+		var views = jet.NewSet(
+			jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
+			jet.InDevelopmentMode(),
+		)
+		n.JetViews = *views
+	} else {
+		var views = jet.NewSet(
+			jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
+			// jet.InDevelopmentMode(),
+		)
+		n.JetViews = *views
+	}
 
-	var views = jet.NewSet(
-		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
-		jet.InDevelopmentMode(),
-	)
-	n.JetViews = *views
 	n.createRenderer()
 
 	return nil
@@ -171,7 +201,16 @@ func (n *Napoleon) ListenAndServe() {
 		WriteTimeout: 600 * time.Second,
 	}
 
-	defer n.DB.Pool.Close()
+	if n.DB.Pool != nil {
+		defer n.DB.Pool.Close()
+	}
+
+	if redisPool != nil {
+		defer redisPool.Close()
+	}
+	if badgerConn != nil {
+		defer badgerConn.Close()
+	}
 
 	n.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
 	err := srv.ListenAndServe()
@@ -217,6 +256,14 @@ func (n *Napoleon) createClientRedisCache() *cache.RedisCache {
 	return &cacheClient
 }
 
+func (n *Napoleon) createClientBadgerCache() *cache.BadgerCache {
+	cacheClient := cache.BadgerCache{
+		Conn: n.createBadgerConn(),
+	}
+
+	return &cacheClient
+}
+
 func (n *Napoleon) createRedisPool() *redis.Pool {
 	return &redis.Pool{
 		MaxIdle:     50,
@@ -231,6 +278,16 @@ func (n *Napoleon) createRedisPool() *redis.Pool {
 			return err
 		},
 	}
+}
+
+func (n *Napoleon) createBadgerConn() *badger.DB {
+	db, err := badger.Open(badger.DefaultOptions(n.RootPath + "/tmp/badger"))
+
+	if err != nil {
+		return nil
+	}
+
+	return db
 }
 
 // BuildDSN builds the datasource name for our database, and returns it as a string

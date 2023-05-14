@@ -4,6 +4,7 @@
 /public/storage
 /storage/*.key
 /vendor
+/cache/testdata
 .env
 napoleon.out
 coverage.out
