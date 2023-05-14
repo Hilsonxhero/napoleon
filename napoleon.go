@@ -11,6 +11,8 @@ import (
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/gomodule/redigo/redis"
+	"github.com/hilsonxhero/napoleon/cache"
 	"github.com/hilsonxhero/napoleon/render"
 	"github.com/hilsonxhero/napoleon/session"
 	"github.com/joho/godotenv"
@@ -32,6 +34,7 @@ type Napoleon struct {
 	JetViews      jet.Set
 	config        config
 	EncryptionKey string
+	Cache         cache.Cache
 }
 
 type config struct {
@@ -40,6 +43,7 @@ type config struct {
 	cookie      cookieConfig
 	sessionType string
 	database    DatabaseConfig
+	redis       RedisConfig
 }
 
 func (n *Napoleon) New(rootPath string) error {
@@ -80,6 +84,11 @@ func (n *Napoleon) New(rootPath string) error {
 		}
 	}
 
+	if os.Getenv("CACHE") == "redis" {
+		myRedisCache := n.createClientRedisCache()
+		n.Cache = myRedisCache
+	}
+
 	n.ErrorLog = errorLog
 	n.InfoLog = infoLog
 	n.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
@@ -97,6 +106,16 @@ func (n *Napoleon) New(rootPath string) error {
 			domain:   os.Getenv("SESSION_DOMAIN"),
 		},
 		sessionType: os.Getenv("SESSION_TYPE"),
+		database: DatabaseConfig{
+			database: os.Getenv("DATABASE_TYPE"),
+			dsn:      n.BuildDSN(),
+		},
+
+		redis: RedisConfig{
+			host:     os.Getenv("REDIS_HOST"),
+			password: os.Getenv("REDIS_PASSWORD"),
+			prefix:   os.Getenv("REDIS_PREFIX"),
+		},
 	}
 
 	sess := session.Session{
@@ -178,6 +197,31 @@ func (n *Napoleon) createRenderer() {
 	}
 
 	n.Render = &myRenderer
+}
+
+func (n *Napoleon) createClientRedisCache() *cache.RedisCache {
+	cacheClient := cache.RedisCache{
+		Conn:   n.createRedisPool(),
+		Prefix: n.config.redis.prefix,
+	}
+
+	return &cacheClient
+}
+
+func (n *Napoleon) createRedisPool() *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     50,
+		MaxActive:   10000,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", n.config.redis.host, redis.DialPassword(n.config.redis.password))
+		},
+
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 }
 
 // BuildDSN builds the datasource name for our database, and returns it as a string
